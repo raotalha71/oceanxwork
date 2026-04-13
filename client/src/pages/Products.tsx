@@ -6,7 +6,7 @@
  * Features: Video modal, 360 VR Tour modal, product spec sheets, real CDN imagery
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { Link } from "wouter";
 import {
   Play, Eye, ChevronRight, X, Zap, Clock, Shield, Package,
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { trpc } from "@/lib/trpc";
 
 const CDN = {
   santorini:    "https://d2xsxph8kpxj0f.cloudfront.net/310519663160055787/e87X8f5qPTseU7B2sdQ9t9/Totem1Front_842495f2.webp",
@@ -698,6 +699,15 @@ const PRODUCTS = [
 
 const CATEGORIES = ["All", "Pool Bars", "Event Bars", "Themed Bars", "Hospitality Structures", "Kiosks"];
 
+const PROMO_VIDEO_URL = "https://oceanex-group.s3.us-east-2.amazonaws.com/Oceanex+Video+Promo+2026.mp4";
+
+const PRODUCT_VIDEO_URLS: Record<string, string> = {
+  "santorini-pool-bar": "https://oceanex-group.s3.us-east-2.amazonaws.com/Santorini+Walk+Through.mp4",
+  "bali-spa": "https://oceanex-group.s3.us-east-2.amazonaws.com/Bali+Spa+Walk+through.mp4",
+  "champagne-bar": "https://oceanex-group.s3.us-east-2.amazonaws.com/Champagne+Bar+Walk+Through.mp4",
+  "bahamas-pool-bar": "https://oceanex-group.s3.us-east-2.amazonaws.com/Miami+PoolBar++Bar+Video+1.mp4",
+};
+
 type Product = typeof PRODUCTS[0];
 type ModalTab = "overview" | "specs" | "revenue";
 
@@ -708,10 +718,24 @@ export default function Products() {
   const [vrModal, setVrModal] = useState(false);
   const [activeTab, setActiveTab] = useState<ModalTab>("overview");
   const [hovered, setHovered] = useState<string | null>(null);
+  const [vrRequestForm, setVrRequestForm] = useState({ name: "", email: "", phone: "" });
+  const [vrRequestSubmitting, setVrRequestSubmitting] = useState(false);
+  const [vrRequestSubmitted, setVrRequestSubmitted] = useState(false);
+  const [vrRequestError, setVrRequestError] = useState("");
+
+  const submitContactMutation = trpc.contact.submit.useMutation();
 
   const filtered = activeCategory === "All"
     ? PRODUCTS
     : PRODUCTS.filter((p) => p.category === activeCategory);
+
+  const activeVideoUrl = selectedProduct
+    ? PRODUCT_VIDEO_URLS[selectedProduct.id] ?? PROMO_VIDEO_URL
+    : PROMO_VIDEO_URL;
+
+  const isPromoVideo = selectedProduct
+    ? !PRODUCT_VIDEO_URLS[selectedProduct.id]
+    : true;
 
   useEffect(() => {
     if (selectedProduct || videoModal || vrModal) {
@@ -727,6 +751,42 @@ export default function Products() {
     setActiveTab("overview");
     setVideoModal(false);
     setVrModal(false);
+  };
+
+  const openVrRequest = (product: Product) => {
+    setSelectedProduct(product);
+    setVrModal(true);
+    setVideoModal(false);
+    setVrRequestSubmitted(false);
+    setVrRequestError("");
+    setVrRequestForm({ name: "", email: "", phone: "" });
+  };
+
+  const handleVrRequestSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedProduct) return;
+
+    setVrRequestSubmitting(true);
+    setVrRequestError("");
+
+    try {
+      await submitContactMutation.mutateAsync({
+        name: vrRequestForm.name.trim(),
+        email: vrRequestForm.email.trim(),
+        phone: vrRequestForm.phone.trim() || null,
+        company: null,
+        enquiryType: "360 Tour Request",
+        budget: null,
+        message: `360 VR tour requested for ${selectedProduct.name} (${selectedProduct.code}).`,
+        pageUrl: typeof window !== "undefined" ? window.location.href : undefined,
+      });
+
+      setVrRequestSubmitted(true);
+    } catch (error) {
+      setVrRequestError(error instanceof Error ? error.message : "Failed to submit request. Please try again.");
+    } finally {
+      setVrRequestSubmitting(false);
+    }
   };
 
   const closeAll = () => {
@@ -839,7 +899,7 @@ export default function Products() {
                       </button>
                     )}
                     {product.hasVR && (
-                      <button onClick={(e) => { e.stopPropagation(); setSelectedProduct(product); setVrModal(true); }} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1rem", background: "rgba(201,169,97,0.2)", backdropFilter: "blur(8px)", border: "1px solid rgba(201,169,97,0.5)", color: "#C9A961", fontFamily: "'Montserrat', sans-serif", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer" }}>
+                      <button onClick={(e) => { e.stopPropagation(); openVrRequest(product); }} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1rem", background: "rgba(201,169,97,0.2)", backdropFilter: "blur(8px)", border: "1px solid rgba(201,169,97,0.5)", color: "#C9A961", fontFamily: "'Montserrat', sans-serif", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer" }}>
                         <Eye size={12} />360 Tour
                       </button>
                     )}
@@ -872,7 +932,7 @@ export default function Products() {
                         </button>
                       )}
                       {product.hasVR && (
-                        <button onClick={() => { setSelectedProduct(product); setVrModal(true); }} style={{ padding: "0.6rem", background: "transparent", color: "#C9A961", fontFamily: "'Montserrat', sans-serif", fontSize: "0.62rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", border: "1px solid rgba(201,169,97,0.3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem" }}>
+                        <button onClick={() => openVrRequest(product)} style={{ padding: "0.6rem", background: "transparent", color: "#C9A961", fontFamily: "'Montserrat', sans-serif", fontSize: "0.62rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", border: "1px solid rgba(201,169,97,0.3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem" }}>
                           <Eye size={11} />360 VR Tour
                         </button>
                       )}
@@ -907,7 +967,7 @@ export default function Products() {
                   </button>
                 )}
                 {selectedProduct.hasVR && (
-                  <button onClick={() => setVrModal(true)} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1rem", background: "rgba(201,169,97,0.2)", backdropFilter: "blur(8px)", border: "1px solid rgba(201,169,97,0.5)", color: "#C9A961", fontFamily: "'Montserrat', sans-serif", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer" }}>
+                  <button onClick={() => openVrRequest(selectedProduct)} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1rem", background: "rgba(201,169,97,0.2)", backdropFilter: "blur(8px)", border: "1px solid rgba(201,169,97,0.5)", color: "#C9A961", fontFamily: "'Montserrat', sans-serif", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer" }}>
                     <Eye size={12} />360 VR Tour
                   </button>
                 )}
@@ -1022,17 +1082,25 @@ export default function Products() {
               <X size={14} />Close
             </button>
             <div style={{ aspectRatio: "16/9", background: "#060E18", border: "1px solid rgba(201,169,97,0.2)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
-              <img src={selectedProduct.image} alt={selectedProduct.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.55 }} />
-              <div style={{ position: "relative", zIndex: 2, textAlign: "center" }}>
-                <div style={{ width: "5rem", height: "5rem", borderRadius: "50%", border: "2px solid #C9A961", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.5rem", cursor: "pointer" }}>
-                  <Play size={28} style={{ color: "#C9A961", marginLeft: "3px" }} />
-                </div>
-                <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: "#C9A961", marginBottom: "0.5rem" }}>Product Video</p>
-                <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "2rem", fontWeight: 700, color: "white", marginBottom: "0.75rem" }}>{selectedProduct.name}</h3>
-                <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "0.85rem", color: "rgba(250,248,245,0.5)", maxWidth: "400px", margin: "0 auto 1.5rem", lineHeight: 1.6 }}>Watch the {selectedProduct.name} inflate in 8 minutes, see it in action at live events, and discover why it is the world's most commercially advanced Drop Stitch bar system.</p>
-                <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "0.72rem", color: "rgba(250,248,245,0.45)", marginBottom: "1rem" }}>Request a private video walkthrough or live demonstration from our team</p>
-                <a href="mailto:hello@oceanex.group" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.75rem 1.5rem", background: "#C9A961", color: "#2C2416", fontFamily: "'Montserrat', sans-serif", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", textDecoration: "none" }}>
-                  Request Live Demo<ArrowRight size={13} />
+              <video
+                key={`${selectedProduct.id}-${activeVideoUrl}`}
+                src={activeVideoUrl}
+                poster={selectedProduct.image}
+                controls
+                autoPlay
+                playsInline
+                preload="metadata"
+                style={{ width: "100%", height: "100%", objectFit: "contain", background: "#060E18" }}
+              >
+                Your browser does not support the video tag.
+              </video>
+              <div style={{ position: "absolute", top: "0.75rem", left: "0.75rem", zIndex: 3, padding: "0.28rem 0.55rem", background: "rgba(6,14,24,0.75)", border: "1px solid rgba(201,169,97,0.35)", fontFamily: "'Montserrat', sans-serif", fontSize: "0.58rem", fontWeight: 600, letterSpacing: "0.13em", textTransform: "uppercase", color: "#C9A961" }}>
+                {isPromoVideo ? "Promo Video" : "Product Walkthrough"}
+              </div>
+              <div style={{ position: "absolute", bottom: "0.75rem", left: "0.75rem", right: "0.75rem", zIndex: 3, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", padding: "0.45rem 0.6rem", background: "rgba(6,14,24,0.65)", border: "1px solid rgba(255,255,255,0.12)" }}>
+                <p style={{ margin: 0, fontFamily: "'Montserrat', sans-serif", fontSize: "0.62rem", fontWeight: 600, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(250,248,245,0.86)" }}>{selectedProduct.name}</p>
+                <a href="mailto:hello@oceanex.group" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", color: "#C9A961", fontFamily: "'Montserrat', sans-serif", fontSize: "0.58rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", textDecoration: "none" }}>
+                  Request Demo<ArrowRight size={12} />
                 </a>
               </div>
             </div>
@@ -1043,30 +1111,72 @@ export default function Products() {
       {/* 360 VR TOUR MODAL */}
       {vrModal && selectedProduct && (
         <div style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(6,14,24,0.97)", backdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }} onClick={() => setVrModal(false)}>
-          <div style={{ width: "100%", maxWidth: "900px", position: "relative" }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ width: "100%", maxWidth: "560px", position: "relative" }} onClick={(e) => e.stopPropagation()}>
             <button onClick={() => setVrModal(false)} style={{ position: "absolute", top: "-3rem", right: 0, display: "flex", alignItems: "center", gap: "0.4rem", background: "none", border: "none", color: "rgba(250,248,245,0.5)", fontFamily: "'Montserrat', sans-serif", fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase", cursor: "pointer" }}>
               <X size={14} />Close
             </button>
-            <div style={{ aspectRatio: "16/9", background: "#060E18", border: "1px solid rgba(201,169,97,0.2)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
-              <img src={selectedProduct.image} alt={selectedProduct.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.5 }} />
-              <div style={{ position: "absolute", inset: 0, opacity: 0.15, backgroundImage: "linear-gradient(rgba(201,169,97,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(201,169,97,0.5) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
-              <div style={{ position: "relative", zIndex: 2, textAlign: "center" }}>
-                <div style={{ width: "6rem", height: "6rem", borderRadius: "50%", border: "2px solid #C9A961", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.5rem" }}>
-                  <Eye size={32} style={{ color: "#C9A961" }} />
+            <div style={{ background: "#060E18", border: "1px solid rgba(201,169,97,0.28)", position: "relative", overflow: "hidden", padding: "2rem" }}>
+              <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", color: "#C9A961", marginBottom: "0.6rem" }}>360 Virtual Tour Request</p>
+              <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "2rem", fontWeight: 700, color: "white", marginBottom: "0.5rem", lineHeight: 1 }}>{selectedProduct.name}</h3>
+              <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "0.82rem", color: "rgba(250,248,245,0.58)", lineHeight: 1.6, marginBottom: "1.5rem" }}>Fill in your details and our team will send your 360 tour access details by email.</p>
+
+              {vrRequestSubmitted ? (
+                <div style={{ border: "1px solid rgba(34,197,94,0.35)", background: "rgba(34,197,94,0.08)", padding: "1rem" }}>
+                  <p style={{ margin: 0, fontFamily: "'Montserrat', sans-serif", fontSize: "0.78rem", fontWeight: 600, color: "#86efac" }}>Request sent successfully.</p>
+                  <p style={{ margin: "0.4rem 0 0", fontFamily: "'Montserrat', sans-serif", fontSize: "0.72rem", color: "rgba(250,248,245,0.75)", lineHeight: 1.6 }}>Our team will contact you shortly on {vrRequestForm.email}.</p>
                 </div>
-                <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", color: "#C9A961", marginBottom: "0.5rem" }}>360 Virtual Tour</p>
-                <h3 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "2rem", fontWeight: 700, color: "white", marginBottom: "0.75rem" }}>{selectedProduct.name}</h3>
-                <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "0.85rem", color: "rgba(250,248,245,0.5)", maxWidth: "420px", margin: "0 auto 1.5rem", lineHeight: 1.6 }}>Step inside the {selectedProduct.name}. Walk around it. Explore every angle. Experience the scale, the quality, and the commercial potential, before you commit.</p>
-                <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "0.72rem", color: "rgba(250,248,245,0.3)", marginBottom: "1.25rem" }}>360 tours launching Q2 2026, book a live showroom visit now</p>
-                <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
-                  <a href="https://wa.me/447541609734" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.75rem 1.5rem", background: "#C9A961", color: "#2C2416", fontFamily: "'Montserrat', sans-serif", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", textDecoration: "none" }}>
-                    Book Showroom Visit<ArrowRight size={13} />
-                  </a>
-                  <a href="mailto:hello@oceanex.group" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.75rem 1.5rem", background: "transparent", color: "#C9A961", fontFamily: "'Montserrat', sans-serif", fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", border: "1px solid rgba(201,169,97,0.4)", textDecoration: "none" }}>
-                    Request VR Demo
-                  </a>
-                </div>
-              </div>
+              ) : (
+                <form onSubmit={handleVrRequestSubmit}>
+                  <div style={{ display: "grid", gap: "0.9rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontFamily: "'Montserrat', sans-serif", fontSize: "0.64rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(250,248,245,0.6)", marginBottom: "0.35rem" }}>Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={vrRequestForm.name}
+                        onChange={(e) => setVrRequestForm((prev) => ({ ...prev, name: e.target.value }))}
+                        placeholder="Your full name"
+                        style={{ width: "100%", padding: "0.72rem 0.85rem", border: "1px solid rgba(250,248,245,0.18)", background: "rgba(250,248,245,0.04)", color: "#FAF8F5", fontFamily: "'Montserrat', sans-serif", fontSize: "0.82rem", outline: "none" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontFamily: "'Montserrat', sans-serif", fontSize: "0.64rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(250,248,245,0.6)", marginBottom: "0.35rem" }}>Email *</label>
+                      <input
+                        type="email"
+                        required
+                        value={vrRequestForm.email}
+                        onChange={(e) => setVrRequestForm((prev) => ({ ...prev, email: e.target.value }))}
+                        placeholder="you@example.com"
+                        style={{ width: "100%", padding: "0.72rem 0.85rem", border: "1px solid rgba(250,248,245,0.18)", background: "rgba(250,248,245,0.04)", color: "#FAF8F5", fontFamily: "'Montserrat', sans-serif", fontSize: "0.82rem", outline: "none" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontFamily: "'Montserrat', sans-serif", fontSize: "0.64rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(250,248,245,0.6)", marginBottom: "0.35rem" }}>Phone (Optional)</label>
+                      <input
+                        type="tel"
+                        value={vrRequestForm.phone}
+                        onChange={(e) => setVrRequestForm((prev) => ({ ...prev, phone: e.target.value }))}
+                        placeholder="+44 7xxx xxxxxx"
+                        style={{ width: "100%", padding: "0.72rem 0.85rem", border: "1px solid rgba(250,248,245,0.18)", background: "rgba(250,248,245,0.04)", color: "#FAF8F5", fontFamily: "'Montserrat', sans-serif", fontSize: "0.82rem", outline: "none" }}
+                      />
+                    </div>
+                  </div>
+
+                  <button type="submit" disabled={vrRequestSubmitting} style={{ marginTop: "1.2rem", width: "100%", padding: "0.82rem", background: "#C9A961", color: "#2C2416", fontFamily: "'Montserrat', sans-serif", fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", border: "none", cursor: "pointer", opacity: vrRequestSubmitting ? 0.72 : 1 }}>
+                    {vrRequestSubmitting ? "Sending..." : "Request 360 Tour"}
+                  </button>
+
+                  {vrRequestError ? (
+                    <p style={{ marginTop: "0.7rem", marginBottom: 0, fontFamily: "'Montserrat', sans-serif", fontSize: "0.72rem", color: "#fca5a5", lineHeight: 1.5 }}>{vrRequestError}</p>
+                  ) : null}
+                </form>
+              )}
+
+              <p style={{ marginTop: "1rem", marginBottom: 0, fontFamily: "'Montserrat', sans-serif", fontSize: "0.66rem", color: "rgba(250,248,245,0.42)", lineHeight: 1.55 }}>
+                Fields marked with * are required.
+              </p>
             </div>
           </div>
         </div>

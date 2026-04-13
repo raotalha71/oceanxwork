@@ -7,7 +7,7 @@ import { ArrowRight, MessageCircle, Mail, MapPin, Calendar, Users, Package, Glob
 import Navbar from "@/components/Navbar";
 import { useTheme } from "@/contexts/ThemeContext";
 import Footer from "@/components/Footer";
-import { ghlContactFormSubmit } from "@/lib/ghl";
+import { trpc } from "@/lib/trpc";
 
 const ENQUIRY_TYPES = [
   { id: "preorder", label: "Pre-Order a Unit", icon: <Package size={15} /> },
@@ -23,22 +23,33 @@ export default function Contact() {
   const [enquiryType, setEnquiryType] = useState("preorder");
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", message: "", budget: "" });
+  const [submitError, setSubmitError] = useState("");
+
+  const submitContactMutation = trpc.contact.submit.useMutation();
 
   const [submitting, setSubmitting] = useState(false);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    await ghlContactFormSubmit({
-      name: form.name,
-      email: form.email,
-      phone: form.phone,
-      company: form.company,
-      enquiryType: enquiryType,
-      message: form.message,
-      budget: form.budget,
-    });
-    setSubmitting(false);
-    setSubmitted(true);
+    setSubmitError("");
+    try {
+      await submitContactMutation.mutateAsync({
+        name: form.name,
+        email: form.email,
+        phone: form.phone || null,
+        company: form.company || null,
+        enquiryType,
+        message: form.message || null,
+        budget: form.budget || null,
+        pageUrl: typeof window !== "undefined" ? window.location.href : undefined,
+      });
+
+      setSubmitted(true);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Failed to send your enquiry. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const inputStyle: React.CSSProperties = {
@@ -138,6 +149,11 @@ export default function Contact() {
                   <button type="submit" disabled={submitting} className="btn-gold" style={{ width: "100%", justifyContent: "center", fontSize: "0.9rem", padding: "1rem", opacity: submitting ? 0.7 : 1 }}>
                     {submitting ? "Sending..." : <>{"Send Enquiry"} <ArrowRight size={16} /></>}
                   </button>
+                  {submitError ? (
+                    <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: "0.75rem", color: "#ef4444", textAlign: "center", marginTop: "0.75rem" }}>
+                      {submitError}
+                    </p>
+                  ) : null}
                   <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: "0.70rem", color: "var(--theme-text-muted)", textAlign: "center", marginTop: "0.75rem" }}>We respond within 4 business hours. Your data is never shared.</p>
                 </form>
               )}

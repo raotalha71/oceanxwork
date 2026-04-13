@@ -1,3 +1,4 @@
+import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -9,6 +10,17 @@ const port = Number(process.env.PORT ?? 3001);
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+  res.on("finish", () => {
+    const elapsedMs = Date.now() - startedAt;
+    console.log(
+      `[http] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${elapsedMs}ms)`
+    );
+  });
+  next();
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "oceanex-server", now: new Date().toISOString() });

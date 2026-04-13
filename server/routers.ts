@@ -1,4 +1,5 @@
 import { publicProcedure, router } from "./trpc";
+import { contactRouter } from "./routers/contact";
 import { oceanaRouter } from "./routers/oceana";
 import { operatorRouter } from "./routers/operator";
 
@@ -18,6 +19,7 @@ export const appRouter = router({
     }),
   }),
 
+  contact: contactRouter,
   oceana: oceanaRouter,
   operator: operatorRouter,
 });
